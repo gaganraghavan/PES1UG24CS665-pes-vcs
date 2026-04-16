@@ -243,5 +243,14 @@ int index_add(const char *path) {
     }
 
     free(data);
-    return -1;
+    
+    // Add entry to index
+    IndexEntry *e = &index.entries[index.count++];
+
+    strcpy(e->path, path);
+    e->mode = get_file_mode(path);
+    e->hash = id;
+
+    // Save updated index
+    return index_save(&index);
 }
