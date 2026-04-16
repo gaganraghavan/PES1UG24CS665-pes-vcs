@@ -204,9 +204,35 @@ int index_save(const Index *index) {
 //   - index_find                       : checking if the file is already staged
 //
 // Returns 0 on success, -1 on error.
-int index_add(Index *index, const char *path) {
-    // TODO: Implement file staging
-    // (See Lab Appendix for logical steps)
-    (void)index; (void)path;
+int index_add(const char *path) {
+    Index index;
+
+    // Load existing index
+    if (index_load(&index) != 0)
+        return -1;
+
+    // Open file
+    FILE *f = fopen(path, "rb");
+    if (!f) return -1;
+
+    // Get file size
+    fseek(f, 0, SEEK_END);
+    size_t len = ftell(f);
+    rewind(f);
+
+    // Read file contents
+    void *data = malloc(len);
+    if (!data) {
+        fclose(f);
+        return -1;
+    }
+
+    if (fread(data, 1, len, f) != len) {
+        fclose(f);
+        free(data);
+        return -1;
+    }
+
+    fclose(f);
     return -1;
 }
