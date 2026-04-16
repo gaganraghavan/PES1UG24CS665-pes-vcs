@@ -145,8 +145,18 @@ int tree_from_index(ObjectID *id_out) {
         e->mode = index.entries[i].mode;
         strcpy(e->name, index.entries[i].path);
         e->hash = index.entries[i].hash;
-        
+
+        }
     }
-}
+
+    char *slash = strchr(index.entries[i].path, '/');
+    if (slash) {
+    // directory exists
+    }
+
+    char dirname[256];
+    int len = slash - index.entries[i].path;
+    strncpy(dirname, index.entries[i].path, len);
+    dirname[len] = '\0';
     return 0;
 }
