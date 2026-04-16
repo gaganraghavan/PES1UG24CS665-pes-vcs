@@ -16,6 +16,8 @@
 // TODO functions:     index_load, index_save, index_add
 
 #include "index.h"
+#include "pes.h"
+#include "tree.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -135,10 +137,30 @@ int index_status(const Index *index) {
 //
 // Returns 0 on success, -1 on error.
 int index_load(Index *index) {
-    // TODO: Implement index loading
-    // (See Lab Appendix for logical steps)
-    (void)index;
-    return -1;
+    index->count = 0;
+
+    FILE *f = fopen(INDEX_FILE, "rb");
+    if (!f) {
+        // No index file yet → treat as empty index
+        return 0;
+    }
+
+    // Read number of entries
+    if (fread(&index->count, sizeof(int), 1, f) != 1) {
+        fclose(f);
+        return -1;
+    }
+
+    // Read all entries
+    for (int i = 0; i < index->count; i++) {
+        if (fread(&index->entries[i], sizeof(IndexEntry), 1, f) != 1) {
+            fclose(f);
+            return -1;
+        }
+    }
+
+    fclose(f);
+    return 0;
 }
 
 // Save the index to .pes/index atomically.
