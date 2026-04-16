@@ -133,5 +133,20 @@ int tree_serialize(const Tree *tree, void **data_out, size_t *len_out) {
 int tree_from_index(ObjectID *id_out) {
     Index index;
     if (index_load(&index) != 0) return -1;
+
+    Tree tree;
+    tree.count = 0;
+
+    for (int i = 0; i < index.count; i++) {
+    if (strchr(index.entries[i].path, '/') == NULL) {
+
+        TreeEntry *e = &tree.entries[tree.count++];
+
+        e->mode = index.entries[i].mode;
+        strcpy(e->name, index.entries[i].path);
+        e->hash = index.entries[i].hash;
+        
+    }
+}
     return 0;
 }
