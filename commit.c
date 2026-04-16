@@ -204,4 +204,12 @@ int commit_create(const char *message, ObjectID *id_out) {
     hash_to_hex(&tree_id, tree_hex);
 
     char parent_hex[HASH_HEX_SIZE + 1] = {0};
+
+     FILE *head = fopen(HEAD_FILE, "r");
+    if (head) {
+        if (fgets(parent_hex, sizeof(parent_hex), head)) {
+            parent_hex[strcspn(parent_hex, "\n")] = 0;
+        }
+        fclose(head);
+    }
 }
