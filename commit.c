@@ -234,4 +234,17 @@ int commit_create(const char *message, ObjectID *id_out) {
     if (object_write(OBJ_COMMIT, buffer, len, &commit_id) != 0)
         return -1;
 
+    char commit_hex[HASH_HEX_SIZE + 1];
+    hash_to_hex(&commit_id, commit_hex);
+
+    FILE *f = fopen(HEAD_FILE, "w");
+    if (!f) return -1;
+
+    fprintf(f, "%s\n", commit_hex);
+    fclose(f);
+
+    if (id_out) *id_out = commit_id;
+
+    return 0;
 }
+
