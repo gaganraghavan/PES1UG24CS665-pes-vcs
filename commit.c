@@ -195,56 +195,53 @@ int head_update(const ObjectID *new_commit) {
 // Returns 0 on success, -1 on error.
 int commit_create(const char *message, ObjectID *id_out) {
 
-    // Step 1: Build tree from index
+    // 1. Build tree
     ObjectID tree_id;
     if (tree_from_index(&tree_id) != 0)
         return -1;
 
-    char tree_hex[HASH_HEX_SIZE + 1];
-    hash_to_hex(&tree_id, tree_hex);
+    // 2. Prepare commit struct
+    Commit commit;
+    memset(&commit, 0, sizeof(commit));
 
-    char parent_hex[HASH_HEX_SIZE + 1] = {0};
+    commit.tree = tree_id;
 
-     FILE *head = fopen(HEAD_FILE, "r");
-    if (head) {
-        if (fgets(parent_hex, sizeof(parent_hex), head)) {
-            parent_hex[strcspn(parent_hex, "\n")] = 0;
-        }
-        fclose(head);
-    }
-
-     const char *author = "Gagan <gagan@example.com>";
-    time_t now = time(NULL);
-
-    // Build commit content
-    char buffer[1024];
-    int len = 0;
-
-    if (strlen(parent_hex) > 0) {
-        len = snprintf(buffer, sizeof(buffer),
-            "tree %s\nparent %s\nauthor %s\n%ld\n\n%s\n",
-            tree_hex, parent_hex, author, now, message);
+    // 3. Read parent (IMPORTANT FIX)
+    if (head_read(&commit.parent) == 0) {
+        commit.has_parent = 1;
     } else {
-        len = snprintf(buffer, sizeof(buffer),
-            "tree %s\nauthor %s\n%ld\n\n%s\n",
-            tree_hex, author, now, message);
+        commit.has_parent = 0;
     }
 
-     ObjectID commit_id;
-    if (object_write(OBJ_COMMIT, buffer, len, &commit_id) != 0)
+    // 4. Author + timestamp (CORRECT FORMAT)
+    snprintf(commit.author, sizeof(commit.author), "%s", pes_author());
+    commit.timestamp = (uint64_t)time(NULL);
+
+    strncpy(commit.message, message, sizeof(commit.message) - 1);
+    commit.message[sizeof(commit.message) - 1] = '\0';
+
+    // 5. Serialize commit
+    void *data;
+    size_t len;
+    if (commit_serialize(&commit, &data, &len) != 0)
         return -1;
 
-    char commit_hex[HASH_HEX_SIZE + 1];
-    hash_to_hex(&commit_id, commit_hex);
+    // 6. Write object
+    ObjectID commit_id;
+    if (object_write(OBJ_COMMIT, data, len, &commit_id) != 0) {
+        free(data);
+        return -1;
+    }
 
-    FILE *f = fopen(HEAD_FILE, "w");
-    if (!f) return -1;
+    free(data);
 
-    fprintf(f, "%s\n", commit_hex);
-    fclose(f);
+    // 7. Update HEAD correctly (CRITICAL FIX)
+    if (head_update(&commit_id) != 0)
+        return -1;
 
     if (id_out) *id_out = commit_id;
 
     return 0;
 }
+
 
