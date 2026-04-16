@@ -115,6 +115,21 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
     compute_hash(full, full_len, &id);
     if (id_out) *id_out = id;
 
+    if (object_exists(&id)) {
+    free(full);
+    return 0;
+    }
+
+    char hex[HASH_HEX_SIZE + 1];
+    hash_to_hex(&id, hex);
+
+    char dir[512], path[512], tmp[520];
+    snprintf(dir, sizeof(dir), "%s/%.2s", OBJECTS_DIR, hex);
+    snprintf(path, sizeof(path), "%s/%.2s/%s", OBJECTS_DIR, hex, hex + 2);
+    snprintf(tmp, sizeof(tmp), "%s.tmp", path);
+
+    mkdir(dir, 0755);
+
     free(full);
     return -1;
 }
