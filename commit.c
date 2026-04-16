@@ -199,4 +199,9 @@ int commit_create(const char *message, ObjectID *id_out) {
     ObjectID tree_id;
     if (tree_from_index(&tree_id) != 0)
         return -1;
+
+    char tree_hex[HASH_HEX_SIZE + 1];
+    hash_to_hex(&tree_id, tree_hex);
+
+    char parent_hex[HASH_HEX_SIZE + 1] = {0};
 }
