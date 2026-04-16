@@ -174,10 +174,25 @@ int index_load(Index *index) {
 //
 // Returns 0 on success, -1 on error.
 int index_save(const Index *index) {
-    // TODO: Implement atomic index saving
-    // (See Lab Appendix for logical steps)
-    (void)index;
-    return -1;
+    FILE *f = fopen(INDEX_FILE, "wb");
+    if (!f) return -1;
+
+    // Write number of entries
+    if (fwrite(&index->count, sizeof(int), 1, f) != 1) {
+        fclose(f);
+        return -1;
+    }
+
+    // Write all entries
+    for (int i = 0; i < index->count; i++) {
+        if (fwrite(&index->entries[i], sizeof(IndexEntry), 1, f) != 1) {
+            fclose(f);
+            return -1;
+        }
+    }
+
+    fclose(f);
+    return 0;
 }
 
 // Stage a file for the next commit.
