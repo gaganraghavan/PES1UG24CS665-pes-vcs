@@ -158,5 +158,21 @@ int tree_from_index(ObjectID *id_out) {
     int len = slash - index.entries[i].path;
     strncpy(dirname, index.entries[i].path, len);
     dirname[len] = '\0';
+
+    int exists = 0;
+    for (int j = 0; j < tree.count; j++) {
+    if (strcmp(tree.entries[j].name, dirname) == 0) {
+        exists = 1;
+        break;
+    }
+    }
+
+    ObjectID sub_id;
+    if (tree_from_index(&sub_id) != 0) return -1;
+
+    TreeEntry *e = &tree.entries[tree.count++];
+    e->mode = 040000;
+    strcpy(e->name, dirname);
+    e->hash = sub_id;
     return 0;
 }
