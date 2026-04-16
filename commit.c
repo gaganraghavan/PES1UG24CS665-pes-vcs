@@ -230,4 +230,8 @@ int commit_create(const char *message, ObjectID *id_out) {
             tree_hex, author, now, message);
     }
 
+     ObjectID commit_id;
+    if (object_write(OBJ_COMMIT, buffer, len, &commit_id) != 0)
+        return -1;
+
 }
