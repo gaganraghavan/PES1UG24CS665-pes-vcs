@@ -80,7 +80,7 @@ int index_status(const Index *index) {
             unstaged_count++;
         } else {
             // Fast diff: check metadata instead of re-hashing file content
-            if (st.st_mtime != (time_t)index->entries[i].mtime_sec || st.st_size != (off_t)index->entries[i].size) {
+            if ((time_t)index->entries[i].mtime_sec != st.st_mtime ||(off_t)index->entries[i].size != st.st_size) {
                 printf("  modified:   %s\n", index->entries[i].path);
                 unstaged_count++;
             }
@@ -139,30 +139,34 @@ int index_status(const Index *index) {
 int index_load(Index *index) {
     index->count = 0;
 
-    FILE *f = fopen(INDEX_FILE, "rb");
-    if (!f) {
-        // No index file yet → treat as empty index
-        return 0;
-    }
+    FILE *f = fopen(INDEX_FILE, "r");
+    if (!f) return 0;  // no index yet
 
-    // Read number of entries
-    if (fread(&index->count, sizeof(int), 1, f) != 1) {
-        fclose(f);
-        return -1;
-    }
+    char hex[HASH_HEX_SIZE + 1];
 
-    // Read all entries
-    for (int i = 0; i < index->count; i++) {
-        if (fread(&index->entries[i], sizeof(IndexEntry), 1, f) != 1) {
+    while (index->count < MAX_INDEX_ENTRIES) {
+        IndexEntry *e = &index->entries[index->count];
+
+        int ret = fscanf(f, "%o %64s %ld %ld %255s\n",
+                         &e->mode,
+                         hex,
+                         &e->mtime_sec,
+                         &e->size,
+                         e->path);
+
+        if (ret != 5) break;
+
+        if (hex_to_hash(hex, &e->hash) != 0) {
             fclose(f);
             return -1;
         }
+
+        index->count++;
     }
 
     fclose(f);
     return 0;
 }
-
 // Save the index to .pes/index atomically.
 //
 // HINTS - Useful functions and syscalls:
@@ -173,26 +177,39 @@ int index_load(Index *index) {
 //   - rename                           : atomically moving the temp file over the old index
 //
 // Returns 0 on success, -1 on error.
+int compare_entries(const void *a, const void *b) {
+    return strcmp(((IndexEntry *)a)->path,
+                  ((IndexEntry *)b)->path);
+}
+
 int index_save(const Index *index) {
-    FILE *f = fopen(INDEX_FILE, "wb");
+    char tmp_path[512];
+    snprintf(tmp_path, sizeof(tmp_path), "%s.tmp", INDEX_FILE);
+
+    FILE *f = fopen(tmp_path, "w");
     if (!f) return -1;
 
-    // Write number of entries
-    if (fwrite(&index->count, sizeof(int), 1, f) != 1) {
-        fclose(f);
-        return -1;
+    Index sorted = *index;
+    qsort(sorted.entries, sorted.count,
+          sizeof(IndexEntry), compare_entries);
+
+    for (int i = 0; i < sorted.count; i++) {
+        char hex[HASH_HEX_SIZE + 1];
+        hash_to_hex(&sorted.entries[i].hash, hex);
+
+        fprintf(f, "%o %s %ld %ld %s\n",
+                sorted.entries[i].mode,
+                hex,
+                sorted.entries[i].mtime_sec,
+                sorted.entries[i].size,
+                sorted.entries[i].path);
     }
 
-    // Write all entries
-    for (int i = 0; i < index->count; i++) {
-        if (fwrite(&index->entries[i], sizeof(IndexEntry), 1, f) != 1) {
-            fclose(f);
-            return -1;
-        }
-    }
-
+    fflush(f);
+    fsync(fileno(f));
     fclose(f);
-    return 0;
+
+    return rename(tmp_path, INDEX_FILE);
 }
 
 // Stage a file for the next commit.
@@ -204,23 +221,15 @@ int index_save(const Index *index) {
 //   - index_find                       : checking if the file is already staged
 //
 // Returns 0 on success, -1 on error.
-int index_add(const char *path) {
-    Index index;
+int index_add(Index *index, const char *path) {
 
-    // Load existing index
-    if (index_load(&index) != 0)
-        return -1;
-
-    // Open file
     FILE *f = fopen(path, "rb");
     if (!f) return -1;
 
-    // Get file size
     fseek(f, 0, SEEK_END);
     size_t len = ftell(f);
     rewind(f);
 
-    // Read file contents
     void *data = malloc(len);
     if (!data) {
         fclose(f);
@@ -235,7 +244,6 @@ int index_add(const char *path) {
 
     fclose(f);
 
-    // Store as blob object
     ObjectID id;
     if (object_write(OBJ_BLOB, data, len, &id) != 0) {
         free(data);
@@ -243,14 +251,20 @@ int index_add(const char *path) {
     }
 
     free(data);
-    
-    // Add entry to index
-    IndexEntry *e = &index.entries[index.count++];
+
+    struct stat st;
+    if (stat(path, &st) != 0) return -1;
+
+    IndexEntry *e = index_find(index, path);
+    if (!e) {
+        e = &index->entries[index->count++];
+    }
 
     strcpy(e->path, path);
     e->mode = get_file_mode(path);
     e->hash = id;
+    e->mtime_sec = st.st_mtime;
+    e->size = st.st_size;
 
-    // Save updated index
-    return index_save(&index);
+    return index_save(index);
 }
