@@ -111,6 +111,10 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
     memcpy(full, header, hlen);
     memcpy(full + hlen, data, len);
 
+    ObjectID id;
+    compute_hash(full, full_len, &id);
+    if (id_out) *id_out = id;
+
     free(full);
     return -1;
 }
