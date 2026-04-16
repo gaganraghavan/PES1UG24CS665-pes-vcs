@@ -234,5 +234,14 @@ int index_add(const char *path) {
     }
 
     fclose(f);
+
+    // Store as blob object
+    ObjectID id;
+    if (object_write(OBJ_BLOB, data, len, &id) != 0) {
+        free(data);
+        return -1;
+    }
+
+    free(data);
     return -1;
 }
