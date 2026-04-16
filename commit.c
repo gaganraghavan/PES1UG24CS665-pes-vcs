@@ -212,4 +212,22 @@ int commit_create(const char *message, ObjectID *id_out) {
         }
         fclose(head);
     }
+
+     const char *author = "Gagan <gagan@example.com>";
+    time_t now = time(NULL);
+
+    // Build commit content
+    char buffer[1024];
+    int len = 0;
+
+    if (strlen(parent_hex) > 0) {
+        len = snprintf(buffer, sizeof(buffer),
+            "tree %s\nparent %s\nauthor %s\n%ld\n\n%s\n",
+            tree_hex, parent_hex, author, now, message);
+    } else {
+        len = snprintf(buffer, sizeof(buffer),
+            "tree %s\nauthor %s\n%ld\n\n%s\n",
+            tree_hex, author, now, message);
+    }
+
 }
