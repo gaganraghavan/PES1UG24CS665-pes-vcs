@@ -130,49 +130,79 @@ int tree_serialize(const Tree *tree, void **data_out, size_t *len_out) {
 //   - object_write    : save that binary buffer to the store as OBJ_TREE
 //
 // Returns 0 on success, -1 on error.
+static int build_tree_level(Index *index, const char *prefix, ObjectID *id_out) {
+    Tree tree;
+    tree.count = 0;
+
+    size_t prefix_len = prefix ? strlen(prefix) : 0;
+
+    for (int i = 0; i < index->count; i++) {
+        const char *path = index->entries[i].path;
+
+        if (prefix_len > 0) {
+            if (strncmp(path, prefix, prefix_len) != 0)
+                continue;
+            path += prefix_len;
+        }
+
+        char *slash = strchr(path, '/');
+
+        if (!slash) {
+            TreeEntry *e = &tree.entries[tree.count++];
+
+            e->mode = index->entries[i].mode;
+            strcpy(e->name, path);
+            e->hash = index->entries[i].hash;
+        } else {
+            char dirname[256];
+            int len = slash - path;
+
+            strncpy(dirname, path, len);
+            dirname[len] = '\0';
+
+            int exists = 0;
+            for (int j = 0; j < tree.count; j++) {
+                if (strcmp(tree.entries[j].name, dirname) == 0) {
+                    exists = 1;
+                    break;
+                }
+            }
+            if (exists) continue;
+
+            char new_prefix[512];
+            if (prefix_len > 0)
+                snprintf(new_prefix, sizeof(new_prefix), "%s%s/", prefix, dirname);
+            else
+                snprintf(new_prefix, sizeof(new_prefix), "%s/", dirname);
+
+            ObjectID sub_id;
+            if (build_tree_level(index, new_prefix, &sub_id) != 0)
+                return -1;
+
+            TreeEntry *e = &tree.entries[tree.count++];
+            e->mode = MODE_DIR;
+            strcpy(e->name, dirname);
+            e->hash = sub_id;
+        }
+    }
+
+    void *data;
+    size_t len;
+
+    if (tree_serialize(&tree, &data, &len) != 0)
+        return -1;
+
+    if (object_write(OBJ_TREE, data, len, id_out) != 0) {
+        free(data);
+        return -1;
+    }
+
+    free(data);
+    return 0;
+}
 int tree_from_index(ObjectID *id_out) {
     Index index;
     if (index_load(&index) != 0) return -1;
 
-    Tree tree;
-    tree.count = 0;
-
-    for (int i = 0; i < index.count; i++) {
-    if (strchr(index.entries[i].path, '/') == NULL) {
-
-        TreeEntry *e = &tree.entries[tree.count++];
-
-        e->mode = index.entries[i].mode;
-        strcpy(e->name, index.entries[i].path);
-        e->hash = index.entries[i].hash;
-
-        }
-    }
-
-    char *slash = strchr(index.entries[i].path, '/');
-    if (slash) {
-    // directory exists
-    }
-
-    char dirname[256];
-    int len = slash - index.entries[i].path;
-    strncpy(dirname, index.entries[i].path, len);
-    dirname[len] = '\0';
-
-    int exists = 0;
-    for (int j = 0; j < tree.count; j++) {
-    if (strcmp(tree.entries[j].name, dirname) == 0) {
-        exists = 1;
-        break;
-    }
-    }
-
-    ObjectID sub_id;
-    if (tree_from_index(&sub_id) != 0) return -1;
-
-    TreeEntry *e = &tree.entries[tree.count++];
-    e->mode = 040000;
-    strcpy(e->name, dirname);
-    e->hash = sub_id;
-    return 0;
+    return build_tree_level(&index, NULL, id_out);
 }
